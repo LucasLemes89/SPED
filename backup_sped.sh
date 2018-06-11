@@ -1,25 +1,14 @@
 #!/bin/bash
 #################################################################################
-#	Script de backup automático do SPED.                                        #
-#	Versão: 2.0                                                                 #
-#	Depende do script "sped.sh". Se não recebeu uma cópia dele                  #
-#	junto com este script, entre em contato.                                    #
-#	Escrito por Hugo Conrado de Carvalho - 3º Sgt, em 26/08/2015.               #
-#	Modificado por Hugo Conrado de Carvalho - 3º Sgt, em 31/08/2015.            #
-#	 . Feita a separação dos procedimentos por função;                          #
-#	 . Incluído tratamento de erros e inclusão nos logs de erros                #
-#	    específicos.                                                            #
-#	Modificado por Hugo Conrado de Carvalho - 3º Sgt, em 01/09/2015.            #
-#	 . Corrigido erro no comando 'su';                                          #
-#	 . Removidas mensagens do stdout do 'tar' do script;                        #
-#	Modificado por Hugo Conrado de Carvalho - 3º Sgt, em 03/09/2015.            #
-#	 . Corrigido problema do PATH do crontab.                                   #
-#	Modificado por Hugo Conrado de Carvalho - 3º Sgt, em 04/09/2015.            #
-#	 . Separada a cópia remoto dos procedimentos de backup;                     #
-#	 . O estado de retorno acumula as saídas de cada função;                    #
-#	 . Adicionada função para remover os backups locais anteriores.             #
-#	Mais detalhes no arquivo "manual_backup_sped.txt"                           #
-#	Para dúvidas ou contato: hugoconrado777@gmail.com                           #
+#	Script de backup automático do SPED.                                    #
+#	Versão: 3.0                                                             #
+#									        #
+#	Escrito por Hugo Conrado de Carvalho - 3º Sgt, em 26/08/2015.           #
+#	Modificado por Lucas da Silva Lemes - 2° Sgt, em 06/06/2018		#
+#	 - modificado para versão 2.9 do sped					#
+#	 - não necessita mais do arquivo sped.sh				#
+#	 - verificar arquivo de configuração do sql (linha 69 do postgresql.conf#
+#	   deve estar descomentada)						#
 #################################################################################
 
 # Declaração de variáveis globais:
