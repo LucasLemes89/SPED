@@ -8,16 +8,19 @@
 #	 - modificado para versão 2.9 do sped					#
 #	 - não necessita mais do arquivo sped.sh				#
 #	 - verificar arquivo de configuração do sql (linha 69 do postgresql.conf#
-#	   deve estar descomentada)						#
+#	   deve estar descomentada)                                             #
+#	 - Agora realiza backup do sped.war                                     #
+#        - Verifique no HBA.conf se há permissões para pg_dump pelo cron        #
+#       Dúvidas: lucasdasilvalemes89@gmail.com					#
 #################################################################################
 
 # Declaração de variáveis globais:
 
-DIR_LOCAL=/root/backup_sped_atual
+DIR_LOCAL=/var/backup_sped_atual
 HOST_REMOTO=root@10.56.208.16
 DIR_REMOTO=/home/sistemas/sped
 DATA=$(date +%Y-%m-%d)
-DIR_TOMCAT7=backup_tomcat7_$DATA.tar.gz
+DIR_SPEDWAR=backup_sped.war_$DATA.tar.gz
 ARQUIVO_SQL=backup_SPED_$DATA.sql
 ARQUIVO_SLAPD=backup_ldap_$DATA.ldif
 ARQUIVO_LOG=log_backup_sped_$DATA.txt
@@ -25,14 +28,14 @@ ARQUIVO_LOG=log_backup_sped_$DATA.txt
 # Declaração de funções:
 
 # Realiza a compactação da pasta do webapps.
-backup_webapps () {
-	echo "Criando a cópia do webapps..." >> $LOG
-	WEBAPPS="$DIR_LOCAL/$DIR_TOMCAT7"
-	tar zcvfp $WEBAPPS /var/cache/tomcat7 >> $LOG;
+backup_sped_war () {
+	echo "Criando a cópia do sped.war..." >> $LOG
+	SPEDWAR="$DIR_LOCAL/$DIR_SPEDWAR"
+	tar zcvfp $SPEDWAR /var/lib/tomcat7/webapps/sped.war >> $LOG;
 	if  [ $? -eq 0 ]
 	then	echo "Cópia criada com sucesso." >> $LOG
 		return 0
-	else	echo "Falha ao criar cópia do webapps." >> $LOG
+	else	echo "Falha ao criar cópia do sped.war" >> $LOG
 		return 2
 	fi
 }
@@ -52,10 +55,14 @@ backup_slapd () {
 
 # Cria o dump da base de dados PostgreSQL.
 backup_postgres () {
+	PATH="$PATH"/usr/bin
 	echo "Criando o dump da base PostgreSQL..." >> $LOG
 	SQL="$DIR_LOCAL/$ARQUIVO_SQL"
 	# O comando do postgres tem de ser executado numa linha só, com a opção '-c'.
-	su - postgres -c "/usr/bin/pg_dump -E UTF8 -v spedDB > $SQL"
+	sped start >> $LOG
+	service tomcat7 stop >> $LOG
+	#su - postgres -c "/usr/bin/pg_dump -E UTF8 -v spedDB > $SQL" >> $LOG
+	pg_dump -U postgres -E UTF8 -v spedDB > $SQL
 	if [ $? -eq 0 ]
 	then	echo "Dump da base criado com sucesso" >> $LOG
 		return 0
@@ -83,7 +90,7 @@ copiar_backup () {
 	fi
 
 	# Testa a existência do arquivo do webapps:
-	if [ -e "$WEBAPPS" ] 
+	if [ -e "$WEBAPPS" ]
 	then	echo "Copiando o webapps para o servidor remoto..." >> $LOG
 		if scp "$WEBAPPS" "$HOST_REMOTO":"$DIR_REMOTO";
 		then	echo "Arquivo copiado para o servidor remoto." >> $LOG
@@ -136,16 +143,21 @@ remover_antigos () {
 
 # Início do script
 # Ajusta o PATH, para bypassar o default do cron:
-#PATH=$PATH":/usr/sbin:/usr/bin:/bin:/usr/local/bin
+PATH="$PATH":/usr/sbin:/usr/bin:/bin:/usr/local/bin:/usr/local/bin/sped
 
 # Inicializa o arquivo de log, se já existia antes:
 LOG="$DIR_LOCAL/$ARQUIVO_LOG"
 echo "Log do backup realizado em $(date "+%d/%m/%Y %H:%M")." > $LOG
 
 # Inicia com tudo ok.
-STATUS=0
 
-if sped stop >> $LOG;
+STATUS=0
+STATUSSV=0
+sleep 15
+sped stop >> $LOG
+(( STATUSSV = $? ))
+echo $STATUSSV >> $LOG
+if [ $STATUSSV -eq 0 ];
 then	echo "Serviços parados. Iniciando o backup." >> $LOG
 else	echo "Erro ao interromper os serviços do sped. Interrompendo backup." >> $LOG
 	sped restart >> $LOG;
@@ -154,9 +166,9 @@ fi
 
 # Realiza as operações sequencialmente, somando o estado de saída das mesmas.
 
-rm -rf /root/backup_sped_atual/* && sleep 300
+rm -rf /var/backup_sped_atual/* && sleep 300
 
-backup_webapps;
+backup_sped_war;
 (( STATUS = $? ))
 
 backup_slapd;
@@ -166,8 +178,7 @@ backup_postgres;
 (( STATUS += $? ))
 
 # Reinicia o sped, independente do resultado do backup.
-sped restart >> $LOG;
-sped restart # Macumba.
+sped start >> $LOG;
 
 echo "Iniciando a cópia dos arquivos para o servidor remoto..." >> $LOG
 copiar_backup;
@@ -192,6 +203,8 @@ then	echo "Realizando a cópia do log para o servidor remoto..." >> $LOG
 	scp "$LOG" "$HOST_REMOTO":"$DIR_REMOTO"
 else	echo "Atenção: o log não foi copiado para o servidor remoto." >> $LOG
 fi
+
+echo "Fim do processo de Backup!" >> $LOG
 
 # Retorna o valor somado das saídas.
 exit "$STATUS"
